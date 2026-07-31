@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build launcher
+        shell: bash
+        run: |
+          cd crispr_launcher
+          python -m venv venv
+          source venv/Scripts/activate
+          pip install -r requirements.txt nuitka
+          python -m nuitka --onefile --standalone --output-filename=crispr.exe \
+            --windows-console-mode=force --follow-imports main.py
+
+      - name: Build core
+        shell: bash
+        run: |
+          cd crispr_core
+          python -m venv venv
+          source venv/Scripts/activate
+          pip install -r requirements.txt nuitka
+          python -m nuitka --onefile --standalone --output-filename=crispr-core.exe \
+            --windows-console-mode=force --follow-imports --include-package=ui \
+            --include-package=langchain_groq --include-package=langchain_openai \
+            --include-package=langchain_anthropic --include-package=langgraph main.py
+
+      - name: Assemble release folder
+        shell: bash
+        run: |
+          mkdir -p release
+          cp crispr_launcher/crispr.exe release/crispr.exe
+          cp crispr_core/crispr-core.exe release/crispr-core.exe
+
+      - name: Generate manifest
+        shell: bash
+        run: |
+          cd release
+          python ../build/generate_manifest.py crispr-core.exe ${{ steps.version.outputs.version }} ${{ github.repository }}
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/crispr.exe
+            release/crispr-core.exe
+            release/manifest.json

@@ -1,0 +1,10 @@
+__pycache__
+hello_world.py
+manifest.json
+prompt.txt
+krakenfix
+main.dist
+main.build
+main.onefile-build
+launcher_venv
+crispr.exe
