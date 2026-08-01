@@ -28,7 +28,8 @@ jobs:
           source venv/Scripts/activate
           pip install -r requirements.txt nuitka
           python -m nuitka --onefile --standalone --output-filename=crispr.exe \
-            --windows-console-mode=force --assume-yes-for-downloads --follow-imports main.py
+            --windows-console-mode=force --assume-yes-for-downloads --follow-imports \
+            --zig main.py
 
       - name: Build core
         shell: bash
@@ -41,7 +42,7 @@ jobs:
             --windows-console-mode=force --assume-yes-for-downloads --follow-imports --include-package=ui \
             --include-package=langchain_groq --include-package=langchain_openai \
             --include-package=langchain_anthropic --include-package=langchain_google_genai \
-            --include-package=langgraph main.py
+            --include-package=langgraph --zig main.py
 
       - name: Assemble release folder
         shell: bash
