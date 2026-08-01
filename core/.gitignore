@@ -1,3 +1,12 @@
 __pycache__
 test_ui.py
 test_session_banner.py
+core_venv/
+main.build
+main.dist
+main.onefile-build
+.sconsign-313.dblite
+@link_input.txt
+build_definitions.h
+scons-error-report.pickle
+scons-report.txt

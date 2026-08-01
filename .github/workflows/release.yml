@@ -23,7 +23,7 @@ jobs:
       - name: Build launcher
         shell: bash
         run: |
-          cd crispr_launcher
+          cd launcher
           python -m venv venv
           source venv/Scripts/activate
           pip install -r requirements.txt nuitka
@@ -33,21 +33,22 @@ jobs:
       - name: Build core
         shell: bash
         run: |
-          cd crispr_core
+          cd core
           python -m venv venv
           source venv/Scripts/activate
           pip install -r requirements.txt nuitka
           python -m nuitka --onefile --standalone --output-filename=crispr-core.exe \
             --windows-console-mode=force --follow-imports --include-package=ui \
             --include-package=langchain_groq --include-package=langchain_openai \
-            --include-package=langchain_anthropic --include-package=langgraph main.py
+            --include-package=langchain_anthropic --include-package=langchain_google_genai \
+            --include-package=langgraph main.py
 
       - name: Assemble release folder
         shell: bash
         run: |
           mkdir -p release
-          cp crispr_launcher/crispr.exe release/crispr.exe
-          cp crispr_core/crispr-core.exe release/crispr-core.exe
+          cp launcher/crispr.exe release/crispr.exe
+          cp core/crispr-core.exe release/crispr-core.exe
 
       - name: Generate manifest
         shell: bash

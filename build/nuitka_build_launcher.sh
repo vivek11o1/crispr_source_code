@@ -7,7 +7,7 @@ set -e
 
 echo "=== Building crispr launcher (Linux/Mac) ==="
 
-cd crispr_launcher
+cd launcher
 
 if [ ! -d "venv" ]; then
     python3 -m venv venv
@@ -22,5 +22,5 @@ python -m nuitka --onefile --standalone --output-filename=crispr \
 deactivate
 cd ..
 
-echo "Done: crispr_launcher/crispr"
-echo "Test it now: cd crispr_launcher && ./crispr doctor"
+echo "Done: launcher/crispr"
+echo "Test it now: cd launcher && ./crispr doctor"

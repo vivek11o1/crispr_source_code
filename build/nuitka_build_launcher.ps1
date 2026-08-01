@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Building crispr launcher (Windows) ===" -ForegroundColor Cyan
 
-Push-Location crispr_launcher
+Push-Location launcher
 
 if (-not (Test-Path "venv")) {
     python -m venv venv
@@ -22,5 +22,5 @@ python -m nuitka --onefile --standalone --output-filename=crispr.exe `
 deactivate
 Pop-Location
 
-Write-Host "Done: crispr_launcher\crispr.exe" -ForegroundColor Green
-Write-Host "Test it now: cd crispr_launcher; .\crispr.exe doctor"
+Write-Host "Done: launcher\crispr.exe" -ForegroundColor Green
+Write-Host "Test it now: cd launcher; .\crispr.exe doctor"

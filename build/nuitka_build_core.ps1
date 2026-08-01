@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Building crispr-core (Windows) ===" -ForegroundColor Cyan
 
-Push-Location crispr_core
+Push-Location core
 
 if (-not (Test-Path "venv")) {
     python -m venv venv
@@ -29,5 +29,5 @@ python -m nuitka --onefile --standalone --output-filename=crispr-core.exe `
 deactivate
 Pop-Location
 
-Write-Host "Done: crispr_core\crispr-core.exe" -ForegroundColor Green
-Write-Host "Test it now: cd crispr_core; `$env:CRISPR_CONFIG_PATH='<path-to-config.toml>'; .\crispr-core.exe --prompt 'list files here'"
+Write-Host "Done: core\crispr-core.exe" -ForegroundColor Green
+Write-Host "Test it now: cd core; `$env:CRISPR_CONFIG_PATH='<path-to-config.toml>'; .\crispr-core.exe --prompt 'list files here'"

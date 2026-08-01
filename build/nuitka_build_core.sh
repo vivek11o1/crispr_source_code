@@ -7,7 +7,7 @@ set -e
 
 echo "=== Building crispr-core (Linux/Mac) ==="
 
-cd crispr_core
+cd core
 
 if [ ! -d "venv" ]; then
     python3 -m venv venv
@@ -28,5 +28,5 @@ python -m nuitka --onefile --standalone --output-filename=crispr-core \
 deactivate
 cd ..
 
-echo "Done: crispr_core/crispr-core"
-echo "Test it now: cd crispr_core && CRISPR_CONFIG_PATH=<path-to-config.toml> ./crispr-core --prompt 'list files here'"
+echo "Done: core/crispr-core"
+echo "Test it now: cd core && CRISPR_CONFIG_PATH=<path-to-config.toml> ./crispr-core --prompt 'list files here'"
