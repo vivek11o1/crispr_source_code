@@ -8,13 +8,11 @@ consumes an already-resolved config dict passed in from main.py.
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 PROVIDER_FACTORY = {
     "groq": lambda cfg: ChatGroq(api_key=cfg["api_key"], model=cfg["model"]),
     "openai": lambda cfg: ChatOpenAI(api_key=cfg["api_key"], model=cfg["model"]),
     "claude": lambda cfg: ChatAnthropic(api_key=cfg["api_key"], model=cfg["model"]),
-    "gemini": lambda cfg: ChatGoogleGenerativeAI(google_api_key=cfg["api_key"], model=cfg["model"]),
     "zen": lambda cfg: ChatOpenAI(
         api_key=cfg["api_key"],
         model=cfg["model"],

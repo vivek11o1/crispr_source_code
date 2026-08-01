@@ -27,14 +27,13 @@ DEFAULTS = {
         "groq": {"api_key": "", "model": "llama-3.1-8b-instant", "fallback_model": "llama-3.3-70b-versatile"},
         "openai": {"api_key": "", "model": "gpt-4o-mini", "fallback_model": "gpt-4o-mini"},
         "claude": {"api_key": "", "model": "claude-sonnet-5", "fallback_model": "claude-sonnet-5"},
-        "gemini": {"api_key": "", "model": "gemini-2.0-flash", "fallback_model": "gemini-2.0-flash"},
         "zen": {"api_key": "", "model": "mimo-v2.5-free", "fallback_model": "north-mini-code-free", "base_url": "https://opencode.ai/zen/v1"},
     },
     "fallback": {"enabled": True, "provider": "groq"},
     "integrations": {"github": {"token": ""}}
 }
 
-_PROVIDER_PREFIXES = [("gsk", "groq"), ("sk-ant", "claude"), ("sk-ZE", "zen"), ("AI", "gemini"), ("sk-", "openai")]
+_PROVIDER_PREFIXES = [("gsk", "groq"), ("sk-ant", "claude"), ("sk-ZE", "zen"), ("sk-", "openai")]
 
 def _deep_merge(defaults: dict, overrides: dict) -> dict:
     """

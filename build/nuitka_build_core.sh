@@ -22,7 +22,6 @@ python -m nuitka --onefile --standalone --output-filename=crispr-core \
     --include-package=langchain_groq \
     --include-package=langchain_openai \
     --include-package=langchain_anthropic \
-    --include-package=langchain_google_genai \
     --include-package=langgraph \
     main.py
 
