@@ -16,6 +16,7 @@ pip install -r requirements.txt nuitka --quiet
 
 python -m nuitka --onefile --standalone --output-filename=crispr.exe `
     --windows-console-mode=force `
+    --assume-yes-for-downloads `
     --follow-imports `
     main.py
 

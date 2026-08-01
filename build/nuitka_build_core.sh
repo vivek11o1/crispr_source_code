@@ -16,6 +16,7 @@ source venv/bin/activate
 pip install -r requirements.txt nuitka --quiet
 
 python -m nuitka --onefile --standalone --output-filename=crispr-core \
+    --assume-yes-for-downloads \
     --follow-imports \
     --include-package=ui \
     --include-package=langchain_groq \
