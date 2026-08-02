@@ -54,7 +54,7 @@ jobs:
         run: |
           cd core
           set +e
-          output=$(CRISPR_CONFIG_PATH=/nonexistent ./crispr-core.exe --prompt test 2>&1)
+          output=$(CRISPR_CONFIG_PATH=/nonexistent ./crispr-core.exe --once --prompt test 2>&1)
           code=$?
           set -e
           echo "$output"

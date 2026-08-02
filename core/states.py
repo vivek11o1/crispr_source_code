@@ -1,6 +1,7 @@
 # state.py
-from typing import TypedDict, Literal, Optional
+from typing import TypedDict, Literal, Optional, Annotated
 from pydantic import BaseModel
+from langgraph.graph.message import add_messages
 
 class Task(TypedDict):
     id: str
@@ -14,7 +15,7 @@ class SessionSummary(BaseModel):
     open_issues: list[str]
 
 class SessionState(TypedDict):
-    messages: list
+    messages: Annotated[list, add_messages]
     turn_count: int
     task_plan: list[Task]
     edited_files: list[str]

@@ -68,6 +68,8 @@ def main():
     parser = argparse.ArgumentParser(prog="crispr-core")
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--session", default=None)
+    parser.add_argument("--once", action="store_true",
+                        help="Answer a single prompt and exit (skip interactive loop).")
     args = parser.parse_args()
 
     config = load_config_from_env()
@@ -163,8 +165,26 @@ def main():
         ui.startup()
 
     try:
-        for event in graph.stream(input_state, graph_config, stream_mode="values"):
-            ui.render_event(None, state=event)
+        while True:
+            for event in graph.stream(input_state, graph_config, stream_mode="values"):
+                ui.render_event(None, state=event)
+
+            if args.once:
+                break
+
+            next_prompt = ui.get_user_input()
+            if next_prompt is None:
+                break  # EOF / Ctrl+C
+            command = next_prompt.strip()
+            if command.lower() in ("exit", "quit", "/exit"):
+                break
+            if not command:
+                continue
+            if command.startswith("/"):
+                if ui.handle_command(command):
+                    break
+                continue
+            input_state = {"messages": [{"role": "user", "content": command}]}
     except Exception:
         import traceback
         ui.console.print("\n[bold red]session crashed unexpectedly[/bold red]")

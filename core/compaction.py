@@ -9,6 +9,7 @@ the same thing drifting apart.
 """
 
 from pydantic import BaseModel
+from langchain_core.messages import RemoveMessage
 from states import SessionState, SessionSummary
 
 COMPACTION_SYSTEM_PROMPT = """
@@ -30,7 +31,10 @@ class _SummaryLLMOutput(BaseModel):
 def _estimate_tokens(messages: list) -> int:
     # Rough heuristic: ~4 chars per token. Good enough for a threshold
     # check, not meant to be precise.
-    total_chars = sum(len(getattr(m, "content", "") or "") for m in messages)
+    total_chars = 0
+    for m in messages:
+        content = m.content if hasattr(m, "content") else m.get("content", "")
+        total_chars += len(content or "")
     return total_chars // 4
 
 
@@ -79,7 +83,24 @@ def compact_node(state: SessionState, summarizer_llm, config: dict) -> dict:
         "content": f"[Session summary]: {full_summary.model_dump_json()}",
     }
 
+    # With the add_messages reducer, state messages only grow. To
+    # compact, explicitly drop the summarized messages (RemoveMessage
+    # removes them from the accumulated history). The tail (keep) stays
+    # untouched in state — no need to re-add it.
+    removals = [
+        RemoveMessage(id=_message_id(m))
+        for m in to_summarize
+        if _message_id(m) is not None
+    ]
+
     return {
-        "messages": [summary_message] + keep,
+        "messages": removals + [summary_message],
         "session_summary": full_summary,
     }
+
+
+def _message_id(m) -> str | None:
+    """Return a stable id for either a LangChain message or a dict."""
+    if hasattr(m, "id"):
+        return getattr(m, "id", None)
+    return (m or {}).get("id") if isinstance(m, dict) else None
