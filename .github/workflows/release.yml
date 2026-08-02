@@ -44,9 +44,29 @@ jobs:
           export CFLAGS="-march=x86_64"
           python -m nuitka --onefile --standalone --output-filename=crispr-core.exe \
             --windows-console-mode=force --assume-yes-for-downloads --follow-imports --include-package=ui \
+            --include-package=langchain --include-package=langchain_core \
             --include-package=langchain_groq --include-package=langchain_openai \
             --include-package=langchain_anthropic \
-            --include-package=langgraph --zig main.py
+            --include-package=langgraph --include-package=langgraph_checkpoint \
+            --include-package=langgraph_prebuilt --include-package=langsmith \
+            --include-package=langchain_protocol --zig main.py
+      - name: Smoke test core
+        shell: bash
+        run: |
+          cd core
+          output=$(CRISPR_CONFIG_PATH=/nonexistent ./crispr-core.exe --prompt test 2>&1)
+          code=$?
+          echo "$output"
+          echo "exit_code=$code"
+          if echo "$output" | grep -qE "ImportError|ModuleNotFoundError|Illegal instruction"; then
+            echo "::error::crispr-core failed to load (import/CPU crash)"
+            exit 1
+          fi
+          if ! echo "$output" | grep -q "No config passed from launcher"; then
+            echo "::error::crispr-core crashed before reaching runtime"
+            exit 1
+          fi
+          echo "core smoke test passed"
       - uses: actions/upload-artifact@v4
         with:
           name: core-exe
