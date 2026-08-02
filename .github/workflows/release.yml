@@ -53,8 +53,10 @@ jobs:
         shell: bash
         run: |
           cd core
+          set +e
           output=$(CRISPR_CONFIG_PATH=/nonexistent ./crispr-core.exe --prompt test 2>&1)
           code=$?
+          set -e
           echo "$output"
           echo "exit_code=$code"
           if echo "$output" | grep -qE "ImportError|ModuleNotFoundError|Illegal instruction"; then
