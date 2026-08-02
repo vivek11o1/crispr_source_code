@@ -47,8 +47,7 @@ jobs:
             --include-package=langchain --include-package=langchain_core \
             --include-package=langchain_groq --include-package=langchain_openai \
             --include-package=langchain_anthropic \
-            --include-package=langgraph --include-package=langgraph_checkpoint \
-            --include-package=langgraph_prebuilt --include-package=langsmith \
+            --include-package=langgraph --include-package=langsmith \
             --include-package=langchain_protocol --zig main.py
       - name: Smoke test core
         shell: bash
