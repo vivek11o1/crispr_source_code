@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - 'v*'
+permissions:
+  contents: write
 jobs:
   build-launcher:
     runs-on: windows-latest
@@ -18,7 +20,7 @@ jobs:
           python -m venv venv
           source venv/Scripts/activate
           pip install -r requirements.txt nuitka
-          export CFLAGS="-march=x86_64"
+          export CFLAGS="-march=x86-64"
           python -m nuitka --onefile --standalone --output-filename=crispr.exe \
             --windows-console-mode=force --assume-yes-for-downloads --follow-imports \
             --zig main.py
@@ -41,7 +43,7 @@ jobs:
           python -m venv venv
           source venv/Scripts/activate
           pip install -r requirements.txt nuitka
-          export CFLAGS="-march=x86_64"
+          export CFLAGS="-march=x86-64"
           python -m nuitka --onefile --standalone --output-filename=crispr-core.exe \
             --windows-console-mode=force --assume-yes-for-downloads --follow-imports --include-package=ui \
             --include-package=langchain --include-package=langchain_core \
