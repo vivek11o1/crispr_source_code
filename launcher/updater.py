@@ -41,7 +41,7 @@ def apply_update(manifest: dict) -> None:
     tmp_path = target_path.with_suffix(".tmp")
     
     try:
-        with httpx.stream("GET", core_url, timeout=60) as resp:
+        with httpx.stream("GET", core_url, timeout=60, follow_redirects=True) as resp:
             resp.raise_for_status()
             with open(tmp_path, "wb") as f:
                 for chunk in resp.iter_bytes(chunk_size=8192):

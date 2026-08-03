@@ -45,6 +45,7 @@ def get_current_branch(repo_path: str) -> str:
         result = subprocess.run(
             ["git", "branch", "--show-current"],
             cwd=repo_path, capture_output=True, text=True, timeout=5,
+            encoding="utf-8", errors="replace",
         )
         return result.stdout.strip() or "unknown"
     except (subprocess.SubprocessError, FileNotFoundError):

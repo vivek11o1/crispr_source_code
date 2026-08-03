@@ -128,6 +128,7 @@ def grep(pattern: str, path: str = ".") -> str:
         result = subprocess.run(
             ["rg", "--line-number", pattern, path],
             capture_output=True, text=True, timeout=15,
+            encoding="utf-8", errors="replace",
         )
         if result.returncode in (0, 1):  # 1 = no matches, still a valid run
             return result.stdout.strip() or "No matches found."
@@ -162,6 +163,7 @@ def run_shell(command: str, timeout: int = 30) -> str:
     try:
         result = subprocess.run(
             command, shell=True, capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
         )
         output = result.stdout + result.stderr
         status = "OK" if result.returncode == 0 else f"exit code {result.returncode}"

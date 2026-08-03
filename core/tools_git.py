@@ -16,6 +16,7 @@ def _run_git(args: list[str], cwd: str, timeout: int = 15) -> tuple[bool, str]:
     try:
         result = subprocess.run(
             ["git"] + args, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
         )
         output = (result.stdout + result.stderr).strip()
         return result.returncode == 0, output or "(no output)"

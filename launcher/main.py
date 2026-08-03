@@ -13,7 +13,7 @@ from rich.console import Console
 
 from config import load_config, save_config, detect_provider, set_provider_key, set_github_token, _parse_config_file
 from license import ensure_valid_license
-from manifest import read_manifest, locate_core, verify_checksum
+from manifest import read_manifest, locate_core, verify_checksum, _install_dir
 from env_check import run_all_checks
 from updater import check_for_update, apply_update
 from logging_setup import setup_logging
@@ -66,7 +66,14 @@ def _prompt_for_provider_key(config: dict) -> dict:
 
 def _verify_core(config: dict) -> str:
     manifest = read_manifest()
-    core_path = locate_core(manifest)
+    try:
+        core_path = locate_core(manifest)
+    except FileNotFoundError:
+        typer.secho(
+            f"crispr-core is missing. Run 'crispr repair' to download it.",
+            fg=typer.colors.RED,
+        )
+        sys.exit(1)
 
     if not verify_checksum(core_path, manifest["sha256"]):
         typer.secho(
@@ -80,6 +87,7 @@ def _core_env(config: dict) -> dict:
     env = os.environ.copy()
     env["CRISPR_CONFIG_PATH"] = str(CONFIG_FILE)
     env["CRISPR_ACTIVE_PROVIDER"] = config["active_provider"]
+    env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     return env
 
@@ -110,9 +118,9 @@ def repair():
     """Attempt to fix common issues: manifest, core binary, corrupted config."""
     typer.echo("Re-fetching manifest...")
     manifest = read_manifest(force_refresh=True)
-    core_path = locate_core(manifest)
-    if not verify_checksum(core_path, manifest["sha256"]):
-        typer.echo("crispr-core checksum invalid. Re-downloading...")
+    core_path = _install_dir() / manifest["core_path"]
+    if not core_path.exists() or not verify_checksum(core_path, manifest["sha256"]):
+        typer.echo("crispr-core missing or checksum invalid. Re-downloading...")
         apply_update(manifest)
     config = load_config()
     save_config(config)
