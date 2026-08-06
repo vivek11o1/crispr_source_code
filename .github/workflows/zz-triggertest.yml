@@ -1,0 +1,10 @@
+name: Trigger Test
+on:
+  push:
+    tags:
+      - 'zz-*'
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "tag trigger works"
