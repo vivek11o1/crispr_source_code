@@ -19,7 +19,7 @@ SCHEMA_VERSION = 1
 
 DEFAULTS = {
     "schema_version": SCHEMA_VERSION,
-    "active_provider": "groq",
+    "active_provider": "zen",
     "max_turn": 25,
     "compaction_threshold_tokens": 6000,
     "license": {"license_key": "", "tier": "free", "last_validated": ""},
@@ -29,7 +29,7 @@ DEFAULTS = {
         "claude": {"api_key": "", "model": "claude-sonnet-5", "fallback_model": "claude-sonnet-5"},
         "zen": {"api_key": "", "model": "mimo-v2.5-free", "fallback_model": "north-mini-code-free", "base_url": "https://opencode.ai/zen/v1"},
     },
-    "fallback": {"enabled": True, "provider": "groq"},
+    "fallback": {"enabled": True, "provider": "zen"},
     "integrations": {"github": {"token": ""}}
 }
 
@@ -57,6 +57,7 @@ def _parse_config_file(file_path: Path) -> dict | None:
         return None
 def load_config():
     if not CONFIG_FILE.exists():
+        save_config(dict(DEFAULTS))
         return dict(DEFAULTS)
     user_cfg = _parse_config_file(CONFIG_FILE)
     

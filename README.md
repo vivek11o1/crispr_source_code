@@ -22,7 +22,7 @@ New folder/
 │   ├── main.py                # Runtime entrypoint: reads config, builds graph, runs agent loop
 │   ├── graph.py               # LangGraph agent loop: compact -> agent -> permission_gate -> tools
 │   ├── states.py              # SessionState TypedDict, Task, SessionSummary
-│   ├── providers.py           # Provider factory: Groq, OpenAI, Claude via LangChain
+│   ├── providers.py           # Provider factory: Zen, Groq, OpenAI, Claude via LangChain
 │   ├── tools.py               # File/shell tools: read_file, write_file, edit_file, grep, run_shell
 │   ├── tools_git.py           # Local git tools: diff, status, log, commit, branch
 │   ├── tools_github.py        # Remote GitHub tools: push, create_pr, fetch_repo_info, fetch_issues
@@ -56,7 +56,7 @@ New folder/
 ### Prerequisites
 - Python 3.11+ (tested with 3.13)
 - Git
-- An LLM provider API key (Groq, OpenAI, or Claude)
+- An LLM provider API key (OpenCode Zen, Groq, OpenAI, or Claude)
 
 ### 1. Create virtual environments
 
@@ -80,7 +80,7 @@ Edit the config file at `%LOCALAPPDATA%\crispr\crispr\config.toml` (Windows) or 
 
 ```toml
 schema_version = 1
-active_provider = "groq"
+active_provider = "zen"
 max_turn = 25
 compaction_threshold_tokens = 6000
 
@@ -89,9 +89,15 @@ key = ""
 tier = "free"
 last_validated = "2026-07-22T00:00:00+00:00"
 
+[providers.zen]
+api_key = "sk-ZE_YOUR_ZEN_KEY_HERE"
+model = "mimo-v2.5-free"
+fallback_model = "north-mini-code-free"
+base_url = "https://opencode.ai/zen/v1"
+
 [providers.groq]
 api_key = "gsk_YOUR_GROQ_KEY_HERE"
-model = "llama-3.3-70b-versatile"
+model = "llama-3.1-8b-instant"
 fallback_model = "llama-3.3-70b-versatile"
 
 [providers.openai]
@@ -106,7 +112,7 @@ fallback_model = "claude-sonnet-5"
 
 [fallback]
 enabled = true
-provider = "groq"
+provider = "zen"
 
 [integrations.github]
 token = ""
@@ -114,7 +120,7 @@ token = ""
 
 Or use the CLI:
 ```bash
-python main.py config set groq
+python main.py config set zen
 # Paste your API key when prompted
 ```
 
@@ -165,7 +171,7 @@ python main.py version       # Show launcher and core versions
 python main.py doctor        # Run environment checks (git, network, disk, config, license)
 python main.py health        # Quick status: license valid? core present?
 python main.py config show   # Show provider configuration
-python main.py config set groq  # Switch provider and set API key
+python main.py config set zen   # Switch provider and set API key
 python main.py repair        # Re-download manifest + fix corrupted config
 python main.py update        # Check for and apply core updates
 ```
@@ -196,7 +202,7 @@ subprocess.run([crispr-core.bat, "--prompt", "fix the bug in auth.py"])
 core/main.py      ──── Reads config from CRISPR_CONFIG_PATH env var
        |
        ├── get_checkpointer()   SQLite session persistence
-       ├── get_llm(config)      Creates LangChain chat model (Groq/OpenAI/Claude)
+       ├── get_llm(config)      Creates LangChain chat model (Zen/Groq/OpenAI/Claude)
        ├── CRISPRUI(...)        Sets up Rich terminal UI
        ├── build_graph(...)     Compiles the LangGraph agent loop
        |
@@ -232,14 +238,14 @@ Config file location: `platformdirs.user_config_dir("crispr")` + `config.toml`
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `active_provider` | `groq` | Which LLM provider to use |
+| `active_provider` | `zen` | Which LLM provider to use |
 | `max_turn` | `25` | Max agent loop iterations per session |
 | `compaction_threshold_tokens` | `6000` | Token count before context is summarized |
 | `providers.<name>.api_key` | `""` | API key for the provider |
 | `providers.<name>.model` | varies | Model name to use |
 | `providers.<name>.fallback_model` | varies | Fallback model for the provider |
 | `fallback.enabled` | `true` | Whether to fall back on rate limits |
-| `fallback.provider` | `groq` | Which provider to fall back to |
+| `fallback.provider` | `zen` | Which provider to fall back to |
 | `integrations.github.token` | `""` | GitHub PAT for remote tools |
 
 ## Session Persistence

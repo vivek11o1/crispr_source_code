@@ -56,7 +56,7 @@ def _prompt_for_provider_key(config: dict) -> dict:
     provider = detect_provider(api_key)
 
     if provider is None:
-        provider = typer.prompt("Couldn't detect provider. Enter manually (groq/openai/claude)")
+        provider = typer.prompt("Couldn't detect provider. Enter manually (zen/groq/openai/claude)")
     config = set_provider_key(config, provider, api_key)
     config["active_provider"] = provider
     save_config(config)

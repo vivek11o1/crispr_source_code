@@ -23,7 +23,13 @@ PROVIDER_FACTORY = {
 
 def get_llm(config: dict, use_fallback: bool = False):
     if use_fallback:
-        provider_name = config["fallback"]["provider"]
+        fallback_cfg = config.get("fallback", {})
+        provider_name = fallback_cfg.get("provider", config["active_provider"])
+        enabled = fallback_cfg.get("enabled", True)
+        if not enabled or not config["providers"].get(provider_name, {}).get("api_key"):
+            # No usable fallback configured — degrade to the active
+            # provider instead of crashing the graph at build time.
+            provider_name = config["active_provider"]
     else:
         provider_name = config["active_provider"]
 
