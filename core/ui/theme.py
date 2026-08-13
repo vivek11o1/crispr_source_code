@@ -20,7 +20,7 @@ from rich.theme import Theme
 
 APP_NAME: str = "crispr"
 APP_TAGLINE: str = "AI Software Engineer"
-APP_VERSION: str = "0.1.0"
+APP_VERSION: str = "0.2.3"
 
 BOX_CHARS = {
     "rounded": ("╭", "╮", "╰", "╯", "─", "│"),

@@ -10,7 +10,6 @@ import re
 from typing import TYPE_CHECKING, Optional
 
 from rich.console import Console
-from rich.prompt import Prompt as RichPrompt
 from rich.text import Text
 
 from . import utils
@@ -34,7 +33,7 @@ class PromptWidget:
     def render_prefix(self) -> Text:
         """Render the prompt prefix symbol."""
         p = self._theme.palette
-        return Text(" ❯ ", style=f"bold {p.accent}")
+        return Text("|>_| ", style=f"bold {p.accent}")
 
     def get_input(self, console: Console) -> Optional[str]:
         """Display the prompt and read user input.
@@ -46,12 +45,15 @@ class PromptWidget:
             The user's input string, or ``None`` on EOF/empty.
         """
         p = self._theme.palette
-        prefix = Text()
-        prefix.append(" ❯ ", style=f"bold {p.accent}")
+        console.print(
+            Text("|>_| ", style=f"bold {p.accent}"),
+            end="",
+        )
 
         try:
-            user_input = RichPrompt.ask(prefix, console=console, default="")
+            user_input = input()
         except (EOFError, KeyboardInterrupt):
+            console.print()
             return None
 
         if user_input and user_input.strip():
@@ -76,7 +78,7 @@ class PromptWidget:
         p = self._theme.palette
 
         console.print(
-            Text(" ❯ ", style=f"bold {p.accent}"),
+            Text("|>_| ", style=f"bold {p.accent}"),
             end="",
         )
 

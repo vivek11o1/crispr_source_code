@@ -32,6 +32,17 @@ console = Console()
 _SUBCOMMANDS = {"doctor", "repair", "update", "version", "config", "health"}
 
 
+def _core_source_command(prompt_text: str) -> list[str]:
+    """In dev (non-frozen) runs, dispatch to the core SOURCE venv so code
+    changes take effect without recompiling crispr-core.exe."""
+    root = Path(__file__).resolve().parent.parent
+    core_main = root / "core" / "main.py"
+    core_python = root / "core" / "core_venv" / "Scripts" / "python.exe"
+    if core_main.exists() and core_python.exists():
+        return [str(core_python), str(core_main), "--prompt", prompt_text]
+    return []
+
+
 def _run_prompt_mode(prompt_text: str, session_id: str | None = None) -> None:
     """Full bootstrap + launch core with the given prompt."""
     setup_logging()
@@ -43,8 +54,10 @@ def _run_prompt_mode(prompt_text: str, session_id: str | None = None) -> None:
     with spinner("Validating license..."):
         config = ensure_valid_license(config)
 
-    core_path = _verify_core(config)
-    args = [core_path, "--prompt", prompt_text]
+    args = _core_source_command(prompt_text) if not getattr(sys, "frozen", False) else []
+    if not args:
+        core_path = _verify_core(config)
+        args = [core_path, "--prompt", prompt_text]
     if session_id:
         args += ["--session", session_id]
     result = subprocess.run(args, env=_core_env(config))

@@ -12,7 +12,14 @@ import sys
 import tomllib
 import os
 import subprocess
+import threading
+import time
 import uuid
+
+try:
+    import msvcrt  # Windows-only console key polling (no extra deps)
+except ImportError:
+    msvcrt = None
 
 from states import SessionState
 from providers import get_llm
@@ -63,6 +70,56 @@ def build_initial_state(prompt: str, repo_path: str) -> SessionState:
         "session_summary": None,
         "approved_tool_call_ids": [],
     }
+
+
+class EscInterceptor:
+    """Watches for the ESC key in a background thread while the graph runs.
+
+    On Windows this polls the console with ``msvcrt`` (no dependencies).
+    Pressing ESC mid-process sets ``interrupted``; the caller can then stop
+    the current run and return to the same session's prompt. The thread
+    only reads keys while the graph is executing, so it never steals
+    keystrokes meant for the input prompt.
+    """
+
+    def __init__(self) -> None:
+        self._stop = threading.Event()
+        self._interrupted = threading.Event()
+
+    def start(self) -> None:
+        """Clear any prior interrupt and spawn a fresh listener thread."""
+        self._interrupted.clear()
+        self._stop.clear()
+        threading.Thread(target=self._listen, daemon=True).start()
+
+    def stop(self) -> None:
+        """Signal the listener thread to exit (takes effect within 50ms)."""
+        self._stop.set()
+
+    @property
+    def interrupted(self) -> bool:
+        return self._interrupted.is_set()
+
+    def _listen(self) -> None:
+        while not self._stop.is_set():
+            if msvcrt and msvcrt.kbhit() and msvcrt.getwch() == "\x1b":
+                self._interrupted.set()
+                return
+            time.sleep(0.05)
+
+
+class NoopEscInterceptor:
+    """Non-Windows fallback — ESC interruption is unavailable."""
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    @property
+    def interrupted(self) -> bool:
+        return False
 
 
 def main():
@@ -165,27 +222,45 @@ def main():
     if not is_resumed_session:
         ui.startup()
 
+    interceptor = EscInterceptor() if msvcrt else NoopEscInterceptor()
+
     try:
+        at_prompt = False
         while True:
+            if at_prompt:
+                next_prompt = ui.get_user_input()
+                if next_prompt is None:
+                    break  # EOF / Ctrl+C
+                command = next_prompt.strip()
+                if command.lower() in ("exit", "quit", "/exit"):
+                    break
+                if not command:
+                    continue
+                if command.startswith("/"):
+                    if ui.handle_command(command):
+                        break
+                    continue
+                input_state = {"messages": [{"role": "user", "content": command}]}
+
+            at_prompt = True
+            interceptor.start()
+            interrupted = False
             for event in graph.stream(input_state, graph_config, stream_mode="values"):
+                if interceptor.interrupted:
+                    interrupted = True
+                    break
                 ui.render_event(None, state=event)
+            interceptor.stop()
+
+            if interrupted:
+                ui.console.print(
+                    "\n[bold yellow]⏹ interrupted[/bold yellow] — "
+                    "[dim]session state saved, still in this session[/dim]"
+                )
+                continue
 
             if args.once:
                 break
-
-            next_prompt = ui.get_user_input()
-            if next_prompt is None:
-                break  # EOF / Ctrl+C
-            command = next_prompt.strip()
-            if command.lower() in ("exit", "quit", "/exit"):
-                break
-            if not command:
-                continue
-            if command.startswith("/"):
-                if ui.handle_command(command):
-                    break
-                continue
-            input_state = {"messages": [{"role": "user", "content": command}]}
     except Exception:
         import traceback
         ui.console.print("\n[bold red]session crashed unexpectedly[/bold red]")
