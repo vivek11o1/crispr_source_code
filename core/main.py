@@ -34,6 +34,7 @@ from tools_github import (
 from manage_task import manage_tasks
 from persistence import get_checkpointer
 from graph import build_graph
+from resilience import AgentInterrupted, configure_rate_limiter
 from ui import CRISPRUI
 
 
@@ -85,16 +86,26 @@ class EscInterceptor:
     def __init__(self) -> None:
         self._stop = threading.Event()
         self._interrupted = threading.Event()
+        self._paused = threading.Event()
 
     def start(self) -> None:
         """Clear any prior interrupt and spawn a fresh listener thread."""
         self._interrupted.clear()
         self._stop.clear()
+        self._paused.clear()
         threading.Thread(target=self._listen, daemon=True).start()
 
     def stop(self) -> None:
         """Signal the listener thread to exit (takes effect within 50ms)."""
         self._stop.set()
+
+    def pause(self) -> None:
+        """Stop polling while a blocking console read (permission prompt)
+        is active, so it never steals the user's approval keystrokes."""
+        self._paused.set()
+
+    def resume(self) -> None:
+        self._paused.clear()
 
     @property
     def interrupted(self) -> bool:
@@ -102,6 +113,9 @@ class EscInterceptor:
 
     def _listen(self) -> None:
         while not self._stop.is_set():
+            if self._paused.is_set():
+                time.sleep(0.05)
+                continue
             if msvcrt and msvcrt.kbhit() and msvcrt.getwch() == "\x1b":
                 self._interrupted.set()
                 return
@@ -115,6 +129,12 @@ class NoopEscInterceptor:
         pass
 
     def stop(self) -> None:
+        pass
+
+    def pause(self) -> None:
+        pass
+
+    def resume(self) -> None:
         pass
 
     @property
@@ -131,6 +151,7 @@ def main():
     args = parser.parse_args()
 
     config = load_config_from_env()
+    configure_rate_limiter(config)
     repo_path = os.getcwd()
     active_branch = get_current_branch(repo_path)
 
@@ -195,14 +216,22 @@ def main():
         tools_loaded=len(ALL_TOOLS),
     )
 
+    interceptor = EscInterceptor() if msvcrt else NoopEscInterceptor()
+
     # ADDED: UI-based confirmation prompt, replaces graph.py's plain
-    # print()/input() fallback for CONFIRM/PROMPT-tier tool calls.
+    # print()/input() fallback for CONFIRM/PROMPT-tier tool calls. The
+    # ESC interceptor is paused while this blocks on input() so it can
+    # never swallow the user's approval keystroke.
     def ask_user_fn(tool_name: str, tool_args: dict) -> bool:
         ui.console.print(
             f"\n[bold yellow]crispr wants to run:[/bold yellow] "
             f"[cyan]{tool_name}[/cyan]({tool_args})"
         )
-        answer = ui.console.input("[bold]Allow? \\[y/N]: [/bold]").strip().lower()
+        interceptor.pause()
+        try:
+            answer = ui.console.input("[bold]Allow? \\[y/N]: [/bold]").strip().lower()
+        finally:
+            interceptor.resume()
         return answer == "y"
 
     # Streams the model's reply token-by-token under a heading naming
@@ -217,12 +246,11 @@ def main():
     graph = build_graph(
         llm, ALL_TOOLS, checkpointer, config,
         ask_user_fn=ask_user_fn, stream_handler=stream_handler,
+        should_cancel=lambda: interceptor.interrupted,
     )
 
     if not is_resumed_session:
         ui.startup()
-
-    interceptor = EscInterceptor() if msvcrt else NoopEscInterceptor()
 
     try:
         at_prompt = False
@@ -245,18 +273,24 @@ def main():
             at_prompt = True
             interceptor.start()
             interrupted = False
-            for event in graph.stream(input_state, graph_config, stream_mode="values"):
-                if interceptor.interrupted:
-                    interrupted = True
-                    break
-                ui.render_event(None, state=event)
-            interceptor.stop()
+            try:
+                for event in graph.stream(input_state, graph_config, stream_mode="values"):
+                    if interceptor.interrupted:
+                        interrupted = True
+                        break
+                    ui.render_event(None, state=event)
+            except AgentInterrupted:
+                interrupted = True
+            finally:
+                interceptor.stop()
 
             if interrupted:
                 ui.console.print(
                     "\n[bold yellow]⏹ interrupted[/bold yellow] — "
                     "[dim]session state saved, still in this session[/dim]"
                 )
+                if args.once:
+                    break
                 continue
 
             if args.once:

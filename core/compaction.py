@@ -11,6 +11,7 @@ the same thing drifting apart.
 from pydantic import BaseModel
 from langchain_core.messages import RemoveMessage
 from states import SessionState, SessionSummary
+from resilience import acquire_rate_limiter
 
 COMPACTION_SYSTEM_PROMPT = """
 Summarize this coding session densely. Focus on: decisions made, the
@@ -59,6 +60,7 @@ def compact_node(state: SessionState, summarizer_llm, config: dict) -> dict:
         }]
 
     try:
+        acquire_rate_limiter()
         llm_output: _SummaryLLMOutput = summarizer_llm.with_structured_output(
             _SummaryLLMOutput
         ).invoke([

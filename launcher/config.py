@@ -24,10 +24,10 @@ DEFAULTS = {
     "compaction_threshold_tokens": 6000,
     "license": {"license_key": "", "tier": "free", "last_validated": ""},
     "providers": {
-        "groq": {"api_key": "", "model": "llama-3.1-8b-instant", "fallback_model": "llama-3.3-70b-versatile"},
-        "openai": {"api_key": "", "model": "gpt-4o-mini", "fallback_model": "gpt-4o-mini"},
-        "claude": {"api_key": "", "model": "claude-sonnet-5", "fallback_model": "claude-sonnet-5"},
-        "zen": {"api_key": "", "model": "mimo-v2.5-free", "fallback_model": "north-mini-code-free", "base_url": "https://opencode.ai/zen/v1"},
+        "groq": {"api_key": "", "model": "llama-3.1-8b-instant", "fallback_model": "llama-3.3-70b-versatile", "rpm_limit": 30},
+        "openai": {"api_key": "", "model": "gpt-4o-mini", "fallback_model": "gpt-4o-mini", "rpm_limit": 500},
+        "claude": {"api_key": "", "model": "claude-sonnet-5", "fallback_model": "claude-sonnet-5", "rpm_limit": 50},
+        "zen": {"api_key": "", "model": "mimo-v2.5-free", "fallback_model": "north-mini-code-free", "base_url": "https://opencode.ai/zen/v1", "rpm_limit": 1000},
     },
     "fallback": {"enabled": True, "provider": "zen"},
     "integrations": {"github": {"token": ""}}

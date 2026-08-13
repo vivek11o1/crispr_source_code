@@ -94,21 +94,25 @@ api_key = "sk-ZE_YOUR_ZEN_KEY_HERE"
 model = "mimo-v2.5-free"
 fallback_model = "north-mini-code-free"
 base_url = "https://opencode.ai/zen/v1"
+rpm_limit = 1000
 
 [providers.groq]
 api_key = "gsk_YOUR_GROQ_KEY_HERE"
 model = "llama-3.1-8b-instant"
 fallback_model = "llama-3.3-70b-versatile"
+rpm_limit = 30
 
 [providers.openai]
 api_key = ""
 model = "gpt-4o-mini"
 fallback_model = "gpt-4o-mini"
+rpm_limit = 500
 
 [providers.claude]
 api_key = ""
 model = "claude-sonnet-5"
 fallback_model = "claude-sonnet-5"
+rpm_limit = 50
 
 [fallback]
 enabled = true
@@ -241,6 +245,7 @@ Config file location: `platformdirs.user_config_dir("crispr")` + `config.toml`
 | `active_provider` | `zen` | Which LLM provider to use |
 | `max_turn` | `25` | Max agent loop iterations per session |
 | `compaction_threshold_tokens` | `6000` | Token count before context is summarized |
+| `providers.<name>.rpm_limit` | groq `30`, zen `1000`, openai `500`, claude `50` | Max LLM calls per minute for that provider (client-side pacing). `0` = disabled. Set to your account tier's real cap to prevent bursts |
 | `providers.<name>.api_key` | `""` | API key for the provider |
 | `providers.<name>.model` | varies | Model name to use |
 | `providers.<name>.fallback_model` | varies | Fallback model for the provider |
