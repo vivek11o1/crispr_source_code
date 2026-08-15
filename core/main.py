@@ -34,7 +34,7 @@ from tools_github import (
 from manage_task import manage_tasks
 from persistence import get_checkpointer
 from graph import build_graph
-from resilience import AgentInterrupted, configure_rate_limiter
+from resilience import AgentInterrupted, QuotaExhausted, configure_rate_limiter
 from ui import CRISPRUI
 
 
@@ -246,7 +246,6 @@ def main():
     graph = build_graph(
         llm, ALL_TOOLS, checkpointer, config,
         ask_user_fn=ask_user_fn, stream_handler=stream_handler,
-        should_cancel=lambda: interceptor.interrupted,
     )
 
     if not is_resumed_session:
@@ -281,6 +280,10 @@ def main():
                     ui.render_event(None, state=event)
             except AgentInterrupted:
                 interrupted = True
+            except QuotaExhausted as e:
+                ui.console.print(f"\n[bold red]free-tier quota exhausted:[/bold red] {e}")
+                ui.shutdown(session_id=thread_id, resumable=True)
+                sys.exit(1)
             finally:
                 interceptor.stop()
 

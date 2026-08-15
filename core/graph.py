@@ -32,7 +32,7 @@ exact request — no more, no less. Follow these rules strictly:
 """
 
 
-def build_graph(llm, tools: list, checkpointer, config: dict, ask_user_fn=None, stream_handler=None, should_cancel=None):
+def build_graph(llm, tools: list, checkpointer, config: dict, ask_user_fn=None, stream_handler=None):
     llm_with_tools = llm.bind_tools(tools)
     summarizer_llm = get_llm(config, use_fallback=True)
 
@@ -70,7 +70,6 @@ def build_graph(llm, tools: list, checkpointer, config: dict, ask_user_fn=None, 
         response = call_with_retry(
             llm_with_tools, full_messages, config,
             stream_handler=stream_handler,
-            should_cancel=should_cancel,
         )
         return {"messages": [response], "turn_count": state["turn_count"] + 1}
 

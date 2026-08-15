@@ -19,6 +19,15 @@ class AgentInterrupted(Exception):
     """Raised mid-LLM-call when the user asks to stop (ESC pressed)."""
 
 
+class QuotaExhausted(Exception):
+    """The provider's free-tier quota is spent — NOT a transient rate limit.
+
+    Retrying a spent quota just re-bills the full context against a dead
+    key, which is exactly how a free tier gets silently drained. Raised
+    fast so the user sees a clear message instead of a retry storm.
+    """
+
+
 class TokenBucket:
     """Minimal pacing gate: one call per (60 / rate_per_minute) seconds."""
 
@@ -86,12 +95,32 @@ def call_with_retry(llm, messages, config, max_retries=5, stream_handler=None, s
         except AgentInterrupted:
             raise
         except Exception as e:
+            if _is_quota_exhausted(e):
+                # Spent quota is permanent until the tier resets — every
+                # retry re-sends the FULL context and gets billed. Fail
+                # fast instead of draining the remaining allowance.
+                raise QuotaExhausted(
+                    "free-tier usage limit reached — the provider says the "
+                    "quota is spent, not temporarily busy. Retrying would "
+                    "just burn more tokens on the same dead key. Switch "
+                    "provider/model or wait for the tier to reset."
+                ) from e
             if _is_rate_limit(e):
                 wait = min(2 ** attempt, 30)
                 time.sleep(wait)
                 continue
             raise
 
+    if _fallback_is_redundant(config):
+        # Active + fallback share the same account/key, so the fallback
+        # call is guaranteed to fail the same way while re-billing the
+        # whole context one more time. Skip it.
+        raise QuotaExhausted(
+            "all LLM retries failed and the fallback provider is the same "
+            "account/key as the active provider, so falling back would just "
+            "burn another full-context request. Check the provider's quota "
+            "or configure a real fallback provider."
+        )
     fallback_llm = get_llm(config, use_fallback=True)
     _rate_limiter.acquire()
     return _invoke(fallback_llm, messages, stream_handler, should_cancel)
@@ -185,3 +214,42 @@ def _merge_stream_chunks(chunks) -> AIMessageChunk:
 def _is_rate_limit(e: Exception) -> bool:
     msg = str(e).lower()
     return any(x in msg for x in ["rate", "429", "413", "tokens per minute", "tpm", "rpm"])
+
+
+def _is_quota_exhausted(e: Exception) -> bool:
+    """True when the provider says the account/tier is OUT of quota.
+
+    Must be checked BEFORE _is_rate_limit: Zen's exhausted-tier error is
+    a 429 whose message contains "Rate limit exceeded" — which the naive
+    rate-limit matcher would otherwise treat as transient and retry.
+    """
+    msg = str(e).lower()
+    return any(x in msg for x in (
+        "freeusagelimit", "free_usage_limit", "usage limit",
+        "insufficient_quota", "insufficient quota", "out of quota",
+        "quota exceeded", "billing", "out of credits",
+    ))
+
+
+def _fallback_is_redundant(config: dict) -> bool:
+    """True when a fallback call would hit the same account/key as active.
+
+    Mirrors get_llm's own degradation rules: when the fallback is
+    disabled or its provider has no key, get_llm silently degrades back
+    to the ACTIVE provider — so the fallback call would re-bill the same
+    quota that just failed. Treat all of those as redundant.
+    """
+    providers = config.get("providers", {})
+    active = config.get("active_provider")
+    fb = config.get("fallback", {})
+    fallback = fb.get("provider", active)
+
+    if not fb.get("enabled", True):
+        return True  # get_llm degrades to active
+    if fallback == active:
+        return True
+    a_key = providers.get(active, {}).get("api_key")
+    f_key = providers.get(fallback, {}).get("api_key")
+    if not f_key:
+        return True  # get_llm degrades to active (same key)
+    return bool(a_key and a_key == f_key)
