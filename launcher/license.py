@@ -10,7 +10,7 @@ from config import save_config
 
 import httpx
 
-VALIDATE_URL = "https://cripr-docs-backend.onrender.com/api/license/validate"
+VALIDATE_URL = "https://crispr-docs-backend.onrender.com/api/license/validate"
 GRACE_PERIOD = timedelta(days=7)
 REVALIDATE_INTERVAL = timedelta(days=7)
 

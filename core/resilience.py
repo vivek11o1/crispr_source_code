@@ -217,17 +217,24 @@ def _is_rate_limit(e: Exception) -> bool:
 
 
 def _is_quota_exhausted(e: Exception) -> bool:
-    """True when the provider says the account/tier is OUT of quota.
+    """True only when the provider says the ACCOUNT is permanently out.
 
-    Must be checked BEFORE _is_rate_limit: Zen's exhausted-tier error is
-    a 429 whose message contains "Rate limit exceeded" — which the naive
-    rate-limit matcher would otherwise treat as transient and retry.
+    Zen's free-tier 429 (type FreeUsageLimitError, message "Rate limit
+    exceeded. Please try again later.") is a ROLLING usage window, not a
+    spent account — the same key intermittently succeeds, and releases
+    before the fail-fast change retried straight through it. So any
+    message phrased as a rate limit ("try again later") is routed to the
+    retry path instead of killing the session. Only unambiguous
+    spent-account language ("quota exceeded", "billing", ...) fails fast.
     """
     msg = str(e).lower()
+    if any(x in msg for x in ("rate limit", "try again later")):
+        return False
     return any(x in msg for x in (
-        "freeusagelimit", "free_usage_limit", "usage limit",
+        "free_usage_limit", "usage limit exceeded",
         "insufficient_quota", "insufficient quota", "out of quota",
-        "quota exceeded", "billing", "out of credits",
+        "quota exceeded", "exceeded your current quota",
+        "out of credits", "billing",
     ))
 
 

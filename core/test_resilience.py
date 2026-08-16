@@ -4,8 +4,11 @@ Standalone script (no pytest), same style as test_session_banner.py.
 Run:  core\\core_venv\\Scripts\\python.exe core\\test_resilience.py
 
 Covers the token-drain regressions found in sessions.db:
-  1. FreeUsageLimitError (out of quota) must fail FAST — exactly 1 request.
-  2. Transient 429 must retry then succeed.
+  1. Permanent quota errors (insufficient_quota, billing) must fail FAST —
+     exactly 1 request.
+  2. Transient 429 AND the Zen free-tier FreeUsageLimitError window must
+     retry then succeed (the window opens back up; retrying is how the
+     pre-fail-fast releases worked through it).
   3. Retries exhausted + redundant fallback (same key) must NOT make a
      fallback request.
   4. Retries exhausted + real cross-provider fallback must still work.
@@ -64,9 +67,17 @@ class FakeLLM:
         yield AIMessageChunk(content=outcome)
 
 
-QUOTA_ERR = Exception(
+# Zen gateway's free-tier 429: a ROLLING usage window, not a spent account.
+# Its own message says "try again later" and the same key intermittently
+# succeeds — releases before the fail-fast change retried through it.
+ZEN_WINDOW_ERR = Exception(
     "RateLimitError: Error code: 429 - {'error': {'type': 'FreeUsageLimitError', "
     "'message': 'Error from provider (Console): Rate limit exceeded. Please try again later.'}}"
+)
+# A genuinely permanent quota error (OpenAI-style insufficient_quota).
+PERM_QUOTA_ERR = Exception(
+    "openai.insufficient_quota: Error code: 429 - You exceeded your current "
+    "quota, please check your plan and billing details."
 )
 TRANSIENT_ERR = Exception("RateLimitError: Error code: 429 - Too many requests, retry after 2s")
 AUTH_ERR = Exception("AuthenticationError: Error code: 401 - Incorrect API key")
@@ -134,16 +145,16 @@ def expect_raises(exc_type, fn, name):
     return False
 
 
-# ── 1. Out-of-quota must fail fast: exactly 1 request, QuotaExhausted ──
+# ── 1. Permanent quota must fail fast: exactly 1 request, QuotaExhausted ──
 def test_quota_fail_fast():
     p = _fast()
     try:
-        llm = FakeLLM([QUOTA_ERR])
+        llm = FakeLLM([PERM_QUOTA_ERR])
         config = dict(CFG_SAME_KEY)
         ok = expect_raises(
             QuotaExhausted,
             lambda: call_with_retry(llm, ["m"], config),
-            "1a. FreeUsageLimitError -> QuotaExhausted",
+            "1a. permanent insufficient_quota -> QuotaExhausted",
         )
         check("1b. quota fail-fast makes exactly 1 request", llm.calls == 1, f"(calls={llm.calls})")
         return ok
@@ -160,6 +171,38 @@ def test_transient_then_success():
         check("2a. transient 429 retried then succeeded", llm.calls == 3, f"(calls={llm.calls})")
         check("2b. merged content correct", result.content == "hello")
         return True
+    finally:
+        p.stop()
+
+
+# ── 2b. Zen free-tier window error must be RETRIED, not fail fast ──
+def test_zen_window_retries_then_success():
+    p = _fast()
+    try:
+        llm = FakeLLM([ZEN_WINDOW_ERR, "hello"])
+        result = call_with_retry(llm, ["m"], dict(CFG_SAME_KEY))
+        check("2c. zen FreeUsageLimitError retried then succeeded", llm.calls == 2, f"(calls={llm.calls})")
+        check("2d. merged content correct", result.content == "hello")
+        return True
+    finally:
+        p.stop()
+
+
+def test_zen_window_exhausted_redundant_skipped():
+    p = _fast()
+    try:
+        llm = FakeLLM([ZEN_WINDOW_ERR])
+        ok = expect_raises(
+            QuotaExhausted,
+            lambda: call_with_retry(llm, ["m"], dict(CFG_SAME_KEY), max_retries=3),
+            "2e. zen window exhausted + redundant fallback -> QuotaExhausted",
+        )
+        check(
+            "2f. no redundant fallback request (calls == max_retries)",
+            llm.calls == 3,
+            f"(calls={llm.calls})",
+        )
+        return ok
     finally:
         p.stop()
 
@@ -293,8 +336,8 @@ def test_graph_integration():
             f"(calls={llm2.calls})",
         )
 
-        # 7c. Quota error propagates through the graph and makes 1 request.
-        llm3 = FakeLLM([QUOTA_ERR])
+        # 7c. Permanent quota error propagates through the graph, 1 request.
+        llm3 = FakeLLM([PERM_QUOTA_ERR])
         cp3 = InMemorySaver()
         g3 = graph_mod.build_graph(
             llm3, [], cp3, dict(CFG_SAME_KEY),
@@ -327,7 +370,8 @@ def test_graph_integration():
 
 # ── 8. Detection helpers, edge cases ──
 def test_detection_helpers():
-    check("8a. FreeUsageLimitError detected", _is_quota_exhausted(QUOTA_ERR))
+    check("8a. permanent insufficient_quota detected", _is_quota_exhausted(PERM_QUOTA_ERR))
+    check("8a2. zen FreeUsageLimitError window NOT permanent", not _is_quota_exhausted(ZEN_WINDOW_ERR))
     check("8b. transient 429 NOT quota", not _is_quota_exhausted(TRANSIENT_ERR))
     check("8c. auth 401 NOT quota", not _is_quota_exhausted(AUTH_ERR))
     check("8d. insufficient_quota detected", _is_quota_exhausted(
@@ -347,9 +391,12 @@ def test_detection_helpers():
     }
     check("8k. different provider, same key redundant", _fallback_is_redundant(same_key_cross))
 
-    # 8l. Ordering guarantee: quota check wins over rate-limit match even
-    # when the message ALSO contains "rate limit exceeded".
-    check("8l. quota beats rate-limit matcher", _is_quota_exhausted(QUOTA_ERR))
+    # 8l. A rate-limit-phrased error wins even when it carries the Zen
+    # FreeUsageLimitError type (it is a resettable window -> retry path).
+    check("8l. zen window beats FreeUsageLimitError type", not _is_quota_exhausted(ZEN_WINDOW_ERR))
+    # 8m. A genuinely permanent quota error is detected even when it is a
+    # 429 (OpenAI returns insufficient_quota as HTTP 429).
+    check("8m. permanent quota detected even as 429", _is_quota_exhausted(PERM_QUOTA_ERR))
     return True
 
 
@@ -374,6 +421,8 @@ if __name__ == "__main__":
     tests = [
         test_quota_fail_fast,
         test_transient_then_success,
+        test_zen_window_retries_then_success,
+        test_zen_window_exhausted_redundant_skipped,
         test_exhausted_redundant_fallback_skipped,
         test_exhausted_real_fallback_used,
         test_auth_error_no_retry,
