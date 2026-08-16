@@ -15,6 +15,11 @@ fi
 source venv/bin/activate
 pip install -r requirements.txt nuitka --quiet
 
+# Baseline CPU target so the binary runs on older machines. Zig's native
+# default targets the build machine's CPU, which crashes elsewhere with
+# STATUS_ILLEGAL_INSTRUCTION (0xC000001D).
+export CFLAGS="-mcpu=baseline"
+
 python -m nuitka --onefile --standalone --output-filename=crispr-core \
     --assume-yes-for-downloads \
     --follow-imports \

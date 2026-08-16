@@ -14,6 +14,11 @@ if (-not (Test-Path "venv")) {
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt nuitka --quiet
 
+# Baseline CPU target so the binary runs on older machines. Zig's native
+# default targets the build machine's CPU, which crashes elsewhere with
+# STATUS_ILLEGAL_INSTRUCTION (0xC000001D).
+$env:CFLAGS = "-mcpu=baseline"
+
 python -m nuitka --onefile --standalone --output-filename=crispr.exe `
     --windows-console-mode=force `
     --assume-yes-for-downloads `
