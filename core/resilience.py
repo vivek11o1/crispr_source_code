@@ -58,6 +58,7 @@ _rate_limiter = TokenBucket(0)
 #   openai — ~500 RPM entry tier (account-tier dependent)
 #   claude — ~50 RPM lowest Anthropic tier (tier-dependent)
 _PROVIDER_DEFAULT_RPM = {
+    "openrouter": 20,
     "groq": 30,
     "zen": 1000,
     "openai": 500,
@@ -105,7 +106,7 @@ def call_with_retry(llm, messages, config, max_retries=5, stream_handler=None, s
                     "just burn more tokens on the same dead key. Switch "
                     "provider/model or wait for the tier to reset."
                 ) from e
-            if _is_rate_limit(e):
+            if _is_rate_limit(e) or _is_transient(e):
                 wait = min(2 ** attempt, 30)
                 time.sleep(wait)
                 continue
@@ -236,6 +237,18 @@ def _is_quota_exhausted(e: Exception) -> bool:
         "quota exceeded", "exceeded your current quota",
         "out of credits", "billing",
     ))
+
+
+def _is_transient(e: Exception) -> bool:
+    """True for temporary server-side errors (500/502/503) that should be
+    retried rather than failing fast — e.g. upstream NVIDIA outages
+    surfaced through OpenRouter."""
+    msg = str(e).lower()
+    return any(x in msg for x in [
+        "internal server error", "upstream error", "server error",
+        "500", "502", "503", "overloaded", "bad gateway",
+        "service unavailable", "gateway timeout",
+    ])
 
 
 def _fallback_is_redundant(config: dict) -> bool:

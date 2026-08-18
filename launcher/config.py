@@ -24,6 +24,7 @@ DEFAULTS = {
     "compaction_threshold_tokens": 6000,
     "license": {"license_key": "", "tier": "free", "last_validated": ""},
     "providers": {
+        "openrouter": {"api_key": "", "model": "nvidia/nemotron-3-ultra-550b-a55b:free", "fallback_model": "nvidia/nemotron-3-ultra-550b-a55b:free", "base_url": "https://openrouter.ai/api/v1", "rpm_limit": 20},
         "groq": {"api_key": "", "model": "llama-3.1-8b-instant", "fallback_model": "llama-3.3-70b-versatile", "rpm_limit": 30},
         "openai": {"api_key": "", "model": "gpt-4o-mini", "fallback_model": "gpt-4o-mini", "rpm_limit": 500},
         "claude": {"api_key": "", "model": "claude-sonnet-5", "fallback_model": "claude-sonnet-5", "rpm_limit": 50},
@@ -33,7 +34,14 @@ DEFAULTS = {
     "integrations": {"github": {"token": ""}}
 }
 
-_PROVIDER_PREFIXES = [("gsk", "groq"), ("sk-ant", "claude"), ("sk-ZE", "zen"), ("sk-", "openai")]
+_PROVIDER_PREFIXES = [("sk-or", "openrouter"), ("gsk", "groq"), ("sk-ant", "claude"), ("sk-ZE", "zen"), ("sk-", "openai")]
+
+_ENV_PROVIDER_VARS = [
+    ("OPENROUTER_API_KEY", "openrouter"),
+    ("GROQ_API_KEY", "groq"),
+    ("OPENAI_API_KEY", "openai"),
+    ("ANTHROPIC_API_KEY", "claude"),
+]
 
 def _deep_merge(defaults: dict, overrides: dict) -> dict:
     """
@@ -101,6 +109,18 @@ def detect_provider(api_key: str) -> str | None:
     for prefix, provider in _PROVIDER_PREFIXES:
         if api_key.startswith(prefix):
             return provider
+    return None
+
+def detect_env_provider() -> tuple[str, str] | None:
+    """Check environment variables for provider API keys.
+
+    Returns (provider_name, api_key) or None.
+    Priority order: openrouter > groq > openai > anthropic.
+    """
+    for env_var, provider in _ENV_PROVIDER_VARS:
+        key = os.environ.get(env_var, "").strip()
+        if key:
+            return provider, key
     return None
 
 def set_provider_key(config: dict, provider: str, api_key: str) -> dict:

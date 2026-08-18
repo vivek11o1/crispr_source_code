@@ -11,7 +11,7 @@ import subprocess
 import typer
 from rich.console import Console
 
-from config import load_config, save_config, detect_provider, set_provider_key, set_github_token, _parse_config_file
+from config import load_config, save_config, detect_provider, detect_env_provider, set_provider_key, set_github_token, _parse_config_file
 from license import ensure_valid_license
 from manifest import read_manifest, locate_core, verify_checksum, _install_dir
 from env_check import run_all_checks
@@ -65,11 +65,20 @@ def _run_prompt_mode(prompt_text: str, session_id: str | None = None) -> None:
 
 
 def _prompt_for_provider_key(config: dict) -> dict:
+    env_result = detect_env_provider()
+    if env_result:
+        provider, api_key = env_result
+        config = set_provider_key(config, provider, api_key)
+        config["active_provider"] = provider
+        save_config(config)
+        typer.echo(f"Provider auto-detected from environment: {provider}")
+        return config
+
     api_key = prompt_api_key()
     provider = detect_provider(api_key)
 
     if provider is None:
-        provider = typer.prompt("Couldn't detect provider. Enter manually (zen/groq/openai/claude)")
+        provider = typer.prompt("Couldn't detect provider. Enter manually (openrouter/zen/groq/openai/claude)")
     config = set_provider_key(config, provider, api_key)
     config["active_provider"] = provider
     save_config(config)

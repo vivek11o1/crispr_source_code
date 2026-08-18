@@ -36,6 +36,7 @@ from resilience import (
     TokenBucket,
     call_with_retry,
     _is_quota_exhausted,
+    _is_transient,
     _fallback_is_redundant,
 )
 
@@ -102,6 +103,22 @@ CFG_FALLBACK_DISABLED = {
 CFG_FALLBACK_NO_KEY = {
     "active_provider": "zen",
     "providers": {"zen": {"api_key": "K1", "model": "m"}, "groq": {"api_key": "", "model": "g"}},
+    "fallback": {"enabled": True, "provider": "groq"},
+}
+CFG_OPENROUTER = {
+    "active_provider": "openrouter",
+    "providers": {
+        "openrouter": {"api_key": "or-key-1", "model": "nvidia/nemotron-3-ultra-550b-a55b:free", "base_url": "https://openrouter.ai/api/v1"},
+        "groq": {"api_key": "gsk-key-2", "model": "llama-3.1-8b-instant"},
+    },
+    "fallback": {"enabled": True, "provider": "groq"},
+}
+CFG_OPENROUTER_SAME_KEY = {
+    "active_provider": "openrouter",
+    "providers": {
+        "openrouter": {"api_key": "K", "model": "nvidia/nemotron-3-ultra-550b-a55b:free"},
+        "groq": {"api_key": "K", "model": "llama-3.1-8b-instant"},
+    },
     "fallback": {"enabled": True, "provider": "groq"},
 }
 
@@ -397,6 +414,20 @@ def test_detection_helpers():
     # 8m. A genuinely permanent quota error is detected even when it is a
     # 429 (OpenAI returns insufficient_quota as HTTP 429).
     check("8m. permanent quota detected even as 429", _is_quota_exhausted(PERM_QUOTA_ERR))
+
+    # 8n. OpenRouter cross-provider fallback not redundant
+    check("8n. openrouter->groq cross-provider not redundant", not _fallback_is_redundant(CFG_OPENROUTER))
+    # 8o. OpenRouter same-key fallback IS redundant
+    check("8o. openrouter same-key groq fallback redundant", _fallback_is_redundant(CFG_OPENROUTER_SAME_KEY))
+
+    # 8p. _is_transient: server errors detected
+    check("8p. internal server error is transient", _is_transient(
+        Exception("openai.APIError: Upstream error from Nvidia: Internal server error")))
+    check("8q. 500 status is transient", _is_transient(Exception("Error code: 500")))
+    check("8r. overloaded is transient", _is_transient(Exception("model overloaded")))
+    check("8s. auth 401 NOT transient", not _is_transient(AUTH_ERR))
+    check("8t. rate limit NOT transient", not _is_transient(TRANSIENT_ERR))
+
     return True
 
 
@@ -417,6 +448,77 @@ def test_token_bucket():
     return True
 
 
+# ── 10. OpenRouter provider: rate-limit retry + fallback to Groq ──
+def test_openrouter_fallback():
+    p = _fast()
+    try:
+        primary = FakeLLM([TRANSIENT_ERR])
+        fallback_llm = FakeLLM(["groq says hello"])
+        with patch.object(resilience, "get_llm", return_value=fallback_llm):
+            result = call_with_retry(primary, ["m"], dict(CFG_OPENROUTER), max_retries=2)
+        check("10a. openrouter fallback to groq called", fallback_llm.calls == 1, f"(calls={fallback_llm.calls})")
+        check("10b. fallback response correct", result.content == "groq says hello")
+        check("10c. openrouter made exactly max_retries calls", primary.calls == 2, f"(calls={primary.calls})")
+        return True
+    finally:
+        p.stop()
+
+
+# ── 11. OpenRouter provider: same-key fallback is skipped ──
+def test_openrouter_redundant_fallback():
+    p = _fast()
+    try:
+        llm = FakeLLM([TRANSIENT_ERR])
+        ok = expect_raises(
+            QuotaExhausted,
+            lambda: call_with_retry(llm, ["m"], dict(CFG_OPENROUTER_SAME_KEY), max_retries=3),
+            "11a. openrouter exhausted + same-key groq fallback -> QuotaExhausted",
+        )
+        check(
+            "11b. no redundant fallback request (calls == max_retries)",
+            llm.calls == 3,
+            f"(calls={llm.calls})",
+        )
+        return ok
+    finally:
+        p.stop()
+
+
+# ── 12. Provider factory: openrouter creates ChatOpenAI with correct base_url ──
+def test_openrouter_factory():
+    from providers import PROVIDER_FACTORY
+
+    created = {}
+
+    class FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            created.update(kwargs)
+
+    with patch("providers.ChatOpenAI", FakeChatOpenAI):
+        cfg = {"api_key": "test-key", "model": "nvidia/nemotron-3-ultra-550b-a55b:free", "base_url": "https://openrouter.ai/api/v1"}
+        PROVIDER_FACTORY["openrouter"](cfg)
+
+    check("12a. openrouter factory calls ChatOpenAI", bool(created))
+    check("12b. correct api_key passed", created.get("api_key") == "test-key")
+    check("12c. correct model passed", created.get("model") == "nvidia/nemotron-3-ultra-550b-a55b:free")
+    check("12d. correct base_url passed", created.get("base_url") == "https://openrouter.ai/api/v1")
+    return True
+
+
+# ── 13. Transient server error (500) retries then succeeds ──
+def test_transient_server_error_retries():
+    p = _fast()
+    try:
+        server_err = Exception("openai.APIError: Upstream error from Nvidia: Internal server error")
+        llm = FakeLLM([server_err, server_err, "recovered"])
+        result = call_with_retry(llm, ["m"], dict(CFG_OPENROUTER))
+        check("13a. 500 retried then succeeded", llm.calls == 3, f"(calls={llm.calls})")
+        check("13b. merged content correct", result.content == "recovered")
+        return True
+    finally:
+        p.stop()
+
+
 if __name__ == "__main__":
     tests = [
         test_quota_fail_fast,
@@ -430,6 +532,10 @@ if __name__ == "__main__":
         test_graph_integration,
         test_detection_helpers,
         test_token_bucket,
+        test_openrouter_fallback,
+        test_openrouter_redundant_fallback,
+        test_openrouter_factory,
+        test_transient_server_error_retries,
     ]
     for t in tests:
         t()

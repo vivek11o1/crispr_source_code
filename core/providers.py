@@ -10,6 +10,11 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 
 PROVIDER_FACTORY = {
+    "openrouter": lambda cfg: ChatOpenAI(
+        api_key=cfg["api_key"],
+        model=cfg["model"],
+        base_url=cfg.get("base_url", "https://openrouter.ai/api/v1"),
+    ),
     "groq": lambda cfg: ChatGroq(api_key=cfg["api_key"], model=cfg["model"]),
     "openai": lambda cfg: ChatOpenAI(api_key=cfg["api_key"], model=cfg["model"]),
     "claude": lambda cfg: ChatAnthropic(api_key=cfg["api_key"], model=cfg["model"]),

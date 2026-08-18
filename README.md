@@ -22,7 +22,7 @@ New folder/
 │   ├── main.py                # Runtime entrypoint: reads config, builds graph, runs agent loop
 │   ├── graph.py               # LangGraph agent loop: compact -> agent -> permission_gate -> tools
 │   ├── states.py              # SessionState TypedDict, Task, SessionSummary
-│   ├── providers.py           # Provider factory: Zen, Groq, OpenAI, Claude via LangChain
+│   ├── providers.py           # Provider factory: OpenRouter, Zen, Groq, OpenAI, Claude via LangChain
 │   ├── tools.py               # File/shell tools: read_file, write_file, edit_file, grep, run_shell
 │   ├── tools_git.py           # Local git tools: diff, status, log, commit, branch
 │   ├── tools_github.py        # Remote GitHub tools: push, create_pr, fetch_repo_info, fetch_issues
@@ -56,7 +56,7 @@ New folder/
 ### Prerequisites
 - Python 3.11+ (tested with 3.13)
 - Git
-- An LLM provider API key (OpenCode Zen, Groq, OpenAI, or Claude)
+- An LLM provider API key (OpenRouter, OpenCode Zen, Groq, OpenAI, or Claude)
 
 ### 1. Create virtual environments
 
@@ -88,6 +88,13 @@ compaction_threshold_tokens = 6000
 key = ""
 tier = "free"
 last_validated = "2026-07-22T00:00:00+00:00"
+
+[providers.openrouter]
+api_key = ""
+model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+fallback_model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+base_url = "https://openrouter.ai/api/v1"
+rpm_limit = 20
 
 [providers.zen]
 api_key = "sk-ZE_YOUR_ZEN_KEY_HERE"
@@ -124,9 +131,22 @@ token = ""
 
 Or use the CLI:
 ```bash
-python main.py config set zen
-# Paste your API key when prompted
+python main.py config set openrouter
+# Paste your API key when prompted (or set OPENROUTER_API_KEY env var)
 ```
+
+### Environment variable auto-detection
+
+Set one of these env vars and crispr will auto-detect the provider on first run:
+
+| Env Var | Provider | Default Model |
+|---------|----------|---------------|
+| `OPENROUTER_API_KEY` | OpenRouter | `nvidia/nemotron-3-ultra-550b-a55b:free` |
+| `GROQ_API_KEY` | Groq | `llama-3.1-8b-instant` |
+| `OPENAI_API_KEY` | OpenAI | `gpt-4o-mini` |
+| `ANTHROPIC_API_KEY` | Claude | `claude-sonnet-5` |
+
+Priority: OpenRouter > Groq > OpenAI > Claude. The model string is configurable via `config.toml` — swap to a paid Nemotron variant or another OpenRouter model by editing `[providers.openrouter].model`.
 
 ### 3. Create the core wrapper
 
@@ -206,7 +226,7 @@ subprocess.run([crispr-core.bat, "--prompt", "fix the bug in auth.py"])
 core/main.py      ──── Reads config from CRISPR_CONFIG_PATH env var
        |
        ├── get_checkpointer()   SQLite session persistence
-       ├── get_llm(config)      Creates LangChain chat model (Zen/Groq/OpenAI/Claude)
+        ├── get_llm(config)      Creates LangChain chat model (OpenRouter/Zen/Groq/OpenAI/Claude)
        ├── CRISPRUI(...)        Sets up Rich terminal UI
        ├── build_graph(...)     Compiles the LangGraph agent loop
        |
@@ -232,6 +252,13 @@ graph.stream()    ──── Agent loop:
 
 If the primary provider hits rate limits (5 retries with exponential backoff), the system automatically falls back to the configured fallback provider using the same conversation context.
 
+**Auto-detection priority** (when no provider is configured):
+1. `OPENROUTER_API_KEY` env var → OpenRouter (Nemotron 3 Ultra)
+2. `GROQ_API_KEY` env var → Groq
+3. `OPENAI_API_KEY` env var → OpenAI
+4. `ANTHROPIC_API_KEY` env var → Claude
+5. Manual API key entry (prefix-detected: `sk-or-` → OpenRouter, `gsk_` → Groq, `sk-ant-` → Claude, `sk-ZE-` → Zen, `sk-` → OpenAI)
+
 ### Context compaction
 
 When the conversation exceeds `compaction_threshold_tokens` (default: 6000), the older messages are summarized by a cheap/fast model into a `SessionSummary` containing decisions made, current task, and open issues. The summary is injected as a system message so the LLM never loses track.
@@ -242,10 +269,10 @@ Config file location: `platformdirs.user_config_dir("crispr")` + `config.toml`
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `active_provider` | `zen` | Which LLM provider to use |
+| `active_provider` | `zen` | Which LLM provider to use (`openrouter`, `zen`, `groq`, `openai`, `claude`) |
 | `max_turn` | `25` | Max agent loop iterations per session |
 | `compaction_threshold_tokens` | `6000` | Token count before context is summarized |
-| `providers.<name>.rpm_limit` | groq `30`, zen `1000`, openai `500`, claude `50` | Max LLM calls per minute for that provider (client-side pacing). `0` = disabled. Set to your account tier's real cap to prevent bursts |
+| `providers.<name>.rpm_limit` | groq `30`, zen `1000`, openai `500`, claude `50`, openrouter `20` | Max LLM calls per minute for that provider (client-side pacing). `0` = disabled. Set to your account tier's real cap to prevent bursts |
 | `providers.<name>.api_key` | `""` | API key for the provider |
 | `providers.<name>.model` | varies | Model name to use |
 | `providers.<name>.fallback_model` | varies | Fallback model for the provider |
