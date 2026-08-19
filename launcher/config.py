@@ -20,15 +20,15 @@ SCHEMA_VERSION = 1
 DEFAULTS = {
     "schema_version": SCHEMA_VERSION,
     "active_provider": "zen",
-    "max_turn": 25,
+    "max_turn": 15,  # Reduced from 25 to conserve token quota per prompt
     "compaction_threshold_tokens": 6000,
     "license": {"license_key": "", "tier": "free", "last_validated": ""},
     "providers": {
-        "openrouter": {"api_key": "", "model": "nvidia/nemotron-3-ultra-550b-a55b:free", "fallback_model": "nvidia/nemotron-3-ultra-550b-a55b:free", "base_url": "https://openrouter.ai/api/v1", "rpm_limit": 20},
-        "groq": {"api_key": "", "model": "llama-3.1-8b-instant", "fallback_model": "llama-3.3-70b-versatile", "rpm_limit": 30},
+        "openrouter": {"api_key": "", "model": "nvidia/nemotron-3-ultra-550b-a55b:free", "fallback_model": "nvidia/nemotron-3-ultra-550b-a55b:free", "base_url": "https://openrouter.ai/api/v1", "rpm_limit": 0},
+        "groq": {"api_key": "", "model": "llama-3.1-8b-instant", "fallback_model": "llama-3.3-70b-versatile", "rpm_limit": 0},
         "openai": {"api_key": "", "model": "gpt-4o-mini", "fallback_model": "gpt-4o-mini", "rpm_limit": 500},
         "claude": {"api_key": "", "model": "claude-sonnet-5", "fallback_model": "claude-sonnet-5", "rpm_limit": 50},
-        "zen": {"api_key": "", "model": "mimo-v2.5-free", "fallback_model": "north-mini-code-free", "base_url": "https://opencode.ai/zen/v1", "rpm_limit": 1000},
+        "zen": {"api_key": "", "model": "mimo-v2.5-free", "fallback_model": "north-mini-code-free", "base_url": "https://opencode.ai/zen/v1", "rpm_limit": 0},
     },
     "fallback": {"enabled": True, "provider": "zen"},
     "integrations": {"github": {"token": ""}}
