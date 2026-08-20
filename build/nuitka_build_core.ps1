@@ -2,6 +2,12 @@
 # Builds ONLY the core binary. Run this after the launcher build has
 # already been confirmed working — isolates which binary broke if
 # something goes wrong.
+#
+# Uses MSVC (Nuitka's Windows default) instead of --zig. Zig's native
+# default targets the build machine's CPU, and its CFLAGS handling
+# doesn't support -mcpu=baseline — producing binaries with AVX-512
+# instructions that crash on Zen 2 / older CPUs with STATUS_ILLEGAL_INSTRUCTION
+# (0xC000001D). MSVC never emits AVX-512 unless /arch:AVX512 is explicit.
 
 $ErrorActionPreference = "Stop"
 
@@ -15,11 +21,6 @@ if (-not (Test-Path "venv")) {
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt nuitka --quiet
 
-# Baseline CPU target so the binary runs on older machines. Zig's native
-# default targets the build machine's CPU, which crashes elsewhere with
-# STATUS_ILLEGAL_INSTRUCTION (0xC000001D).
-$env:CFLAGS = "-mcpu=baseline"
-
 python -m nuitka --onefile --standalone --output-filename=crispr-core.exe `
     --windows-console-mode=force `
     --assume-yes-for-downloads `
@@ -29,7 +30,6 @@ python -m nuitka --onefile --standalone --output-filename=crispr-core.exe `
     --include-package=langchain_openai `
     --include-package=langchain_anthropic `
     --include-package=langgraph `
-    --zig `
     main.py
 
 deactivate

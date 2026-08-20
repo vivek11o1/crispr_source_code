@@ -1,6 +1,9 @@
 # build/nuitka_build_launcher.ps1
 # Builds ONLY the launcher binary. Run and test this in isolation before
 # touching core, per the "test each binary independently" rule.
+#
+# Uses MSVC (Nuitka's Windows default) instead of --zig. See
+# nuitka_build_core.ps1 for why --zig was removed.
 
 $ErrorActionPreference = "Stop"
 
@@ -14,16 +17,10 @@ if (-not (Test-Path "venv")) {
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt nuitka --quiet
 
-# Baseline CPU target so the binary runs on older machines. Zig's native
-# default targets the build machine's CPU, which crashes elsewhere with
-# STATUS_ILLEGAL_INSTRUCTION (0xC000001D).
-$env:CFLAGS = "-mcpu=baseline"
-
 python -m nuitka --onefile --standalone --output-filename=crispr.exe `
     --windows-console-mode=force `
     --assume-yes-for-downloads `
     --follow-imports `
-    --zig `
     main.py
 
 deactivate

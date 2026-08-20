@@ -2,6 +2,9 @@
 # build/nuitka_build_launcher.sh
 # Builds ONLY the launcher binary, for Linux/Mac CI runners or local
 # testing on those platforms. Mirrors nuitka_build_launcher.ps1.
+#
+# Uses GCC/Clang default instead of --zig. See nuitka_build_core.sh
+# for why --zig was removed.
 
 set -e
 
@@ -15,10 +18,8 @@ fi
 source venv/bin/activate
 pip install -r requirements.txt nuitka --quiet
 
-# Baseline CPU target so the binary runs on older machines. Zig's native
-# default targets the build machine's CPU, which crashes elsewhere with
-# STATUS_ILLEGAL_INSTRUCTION (0xC000001D).
-export CFLAGS="-mcpu=baseline"
+# -march=x86-64 targets the x86-64 baseline (SSE2 only, no AVX/AVX2/AVX-512).
+export CFLAGS="-march=x86-64"
 
 python -m nuitka --onefile --standalone --output-filename=crispr \
     --assume-yes-for-downloads \

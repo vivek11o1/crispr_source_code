@@ -32,15 +32,23 @@ console = Console()
 _SUBCOMMANDS = {"doctor", "repair", "update", "version", "config", "health"}
 
 
-def _core_source_command(prompt_text: str) -> list[str]:
+def _core_source_command(prompt_text: str, session_id: str | None = None) -> list[str]:
     """In dev (non-frozen) runs, dispatch to the core SOURCE venv so code
-    changes take effect without recompiling crispr-core.exe."""
+    changes take effect without recompiling crispr-core.exe.  Also used
+    as a runtime fallback when the compiled binary crashes with
+    STATUS_ILLEGAL_INSTRUCTION (0xC000001D) on CPUs that lack AVX-512."""
     root = Path(__file__).resolve().parent.parent
     core_main = root / "core" / "main.py"
     core_python = root / "core" / "core_venv" / "Scripts" / "python.exe"
     if core_main.exists() and core_python.exists():
-        return [str(core_python), str(core_main), "--prompt", prompt_text]
+        cmd = [str(core_python), str(core_main), "--prompt", prompt_text]
+        if session_id:
+            cmd += ["--session", session_id]
+        return cmd
     return []
+
+
+STATUS_ILLEGAL_INSTRUCTION = 0xC000001D
 
 
 def _run_prompt_mode(prompt_text: str, session_id: str | None = None) -> None:
@@ -54,14 +62,34 @@ def _run_prompt_mode(prompt_text: str, session_id: str | None = None) -> None:
     with spinner("Validating license..."):
         config = ensure_valid_license(config)
 
-    args = _core_source_command(prompt_text) if not getattr(sys, "frozen", False) else []
-    if not args:
+    frozen = getattr(sys, "frozen", False)
+
+    if frozen:
         core_path = _verify_core(config)
         args = [core_path, "--prompt", prompt_text]
-    if session_id:
-        args += ["--session", session_id]
-    result = subprocess.run(args, env=_core_env(config))
-    sys.exit(result.returncode)
+        if session_id:
+            args += ["--session", session_id]
+        result = subprocess.run(args, env=_core_env(config))
+
+        if result.returncode == STATUS_ILLEGAL_INSTRUCTION:
+            source_cmd = _core_source_command(prompt_text, session_id)
+            if source_cmd:
+                console.print(
+                    "[yellow]crispr-core.exe crashed (illegal instruction — "
+                    "CPU incompatible). Falling back to Python source.[/yellow]"
+                )
+                result = subprocess.run(source_cmd, env=_core_env(config))
+
+        sys.exit(result.returncode)
+    else:
+        args = _core_source_command(prompt_text, session_id)
+        if not args:
+            core_path = _verify_core(config)
+            args = [core_path, "--prompt", prompt_text]
+            if session_id:
+                args += ["--session", session_id]
+        result = subprocess.run(args, env=_core_env(config))
+        sys.exit(result.returncode)
 
 
 def _prompt_for_provider_key(config: dict) -> dict:
